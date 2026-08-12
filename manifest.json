@@ -1,0 +1,17 @@
+{
+  "name": "Cadência",
+  "short_name": "Cadência",
+  "description": "Registo semanal de blocos, tarefas e progresso.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14171E",
+  "theme_color": "#14171E",
+  "lang": "pt-PT",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
