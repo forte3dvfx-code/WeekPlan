@@ -1,67 +1,53 @@
-/* sw.js — service worker.
+/* sw.js — funciona sem rede.
  *
- * IMPORTANTE: incrementa CACHE_VERSAO sempre que alterares qualquer ficheiro.
- * Sem isso o telemóvel continua a servir a versão antiga da cache.
- * Depois de publicar, abre a app duas vezes: a primeira instala o novo
- * service worker, a segunda passa a usá-lo.
+ * Primeiro a rede, depois a cache: com rede vês sempre a versão nova;
+ * sem rede, a última que ficou guardada. (Cache primeiro deixava versões
+ * antigas presas no telemóvel.)
+ * Sobe CACHE_NAME sempre que mudares um ficheiro.
  */
-const CACHE_VERSAO = 'cadencia-v1';
+const CACHE_NAME = 'cadencia-v2';
 
-const FICHEIROS = [
+const SHELL = [
   './',
   './index.html',
   './manifest.json',
   './css/style.css',
-  './js/dates.js',
   './js/db.js',
-  './js/schedule.js',
-  './js/store.js',
-  './js/export.js',
-  './js/charts.js',
-  './js/ui-sheet.js',
-  './js/ui-hoje.js',
-  './js/ui-semana.js',
-  './js/ui-evolucao.js',
-  './js/ui-definicoes.js',
+  './js/drive.js',
   './js/app.js',
   './icons/icon-192.png',
   './icons/icon-512.png'
 ];
 
-self.addEventListener('install', (evento) => {
-  evento.waitUntil(
-    caches.open(CACHE_VERSAO)
-      // addAll falha inteiro se um ficheiro faltar; o map individual é tolerante
-      .then((cache) => Promise.all(
-        FICHEIROS.map((f) => cache.add(f).catch(() => null))
-      ))
+self.addEventListener('install', (ev) => {
+  ev.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((c) => Promise.all(SHELL.map((f) => c.add(f).catch(() => null))))
       .then(() => self.skipWaiting())
   );
 });
 
-self.addEventListener('activate', (evento) => {
-  evento.waitUntil(
+self.addEventListener('activate', (ev) => {
+  ev.waitUntil(
     caches.keys()
-      .then((chaves) => Promise.all(
-        chaves.filter((c) => c !== CACHE_VERSAO).map((c) => caches.delete(c))
-      ))
+      .then((ks) => Promise.all(ks.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
 
-self.addEventListener('fetch', (evento) => {
-  if (evento.request.method !== 'GET') return;
-  evento.respondWith(
-    caches.match(evento.request).then((resposta) => {
-      if (resposta) return resposta;
-      return fetch(evento.request).then((rede) => {
-        // guarda o que for novo, para funcionar offline na próxima vez
-        if (rede && rede.status === 200 && rede.type === 'basic') {
-          const copia = rede.clone();
-          caches.open(CACHE_VERSAO).then((cache) => cache.put(evento.request, copia));
+self.addEventListener('fetch', (ev) => {
+  const req = ev.request;
+  // só os ficheiros da própria app; a Google (Drive) passa direto
+  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
+  ev.respondWith(
+    fetch(req)
+      .then((r) => {
+        if (r && r.status === 200) {
+          const copia = r.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(req, copia));
         }
-        return rede;
-      }).catch(() => caches.match('./index.html'));
-    })
+        return r;
+      })
+      .catch(() => caches.match(req).then((m) => m || caches.match('./index.html')))
   );
 });
