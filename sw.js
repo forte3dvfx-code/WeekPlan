@@ -5,7 +5,7 @@
  * antigas presas no telemóvel.)
  * Sobe CACHE_NAME sempre que mudares um ficheiro.
  */
-const CACHE_NAME = 'cadencia-v2';
+const CACHE_NAME = 'cadencia-v2.1';
 
 const SHELL = [
   './',

@@ -70,6 +70,7 @@ const DB = (function () {
     delete out.dia;
     delete out.variacoes;
     delete out.curso;
+    if (out.pedeNota === undefined) out.pedeNota = !!out.pedeResultado;   // nome da v1
     delete out.pedeResultado;
     if (!out.area) out.area = out.faixa || 'outro';
     delete out.faixa;

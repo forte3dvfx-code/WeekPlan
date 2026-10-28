@@ -10,7 +10,7 @@
  * registo — o que não tem registo está por fazer.
  */
 
-const APP_VERSION = 'v2';
+const APP_VERSION = 'v2.1';
 
 /* ================================================================
    Datas — sempre texto "YYYY-MM-DD", nunca Date, para não haver
@@ -262,7 +262,8 @@ const ICON = {
   more: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>',
   left: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
   right: '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
-  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>'
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  pen: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>'
 };
 
 function anel(p, tam = 96, traco = 10, cor = 'var(--accent)') {
@@ -367,13 +368,16 @@ function linhaBloco(data, b) {
   const estado = e ? e.estado : '';
   let sub = b.hora + ' · ' + duracao(b.minutos);
   if (estado === 'feito' && e.minutos !== b.minutos) sub = b.hora + ' · ' + duracao(e.minutos) + ' <s>' + duracao(b.minutos) + '</s>';
-  if (estado === 'falhado') sub = b.hora + ' · ' + (e.nota ? esc(e.nota) : 'não cumprido');
-  else if (e && e.nota) sub += ' · ' + esc(e.nota);
+  if (estado === 'falhado') sub = b.hora + ' · não cumprido';
   else if (!e && b.nota) sub += ' · ' + esc(b.nota);
+  // O tick marca com um toque; tocar no nome abre o registo para escrever um comentário.
+  const comentario = e && e.nota
+    ? `<span class="nt">${ICON.pen}${esc(e.nota)}</span>`
+    : e && estado === 'feito' ? `<span class="nt add">${ICON.pen}Acrescentar comentário</span>` : '';
   return `<div class="row ${estado}" style="--c:${a.cor}">
     <button type="button" class="tick" data-act="toggle" data-d="${data}" data-b="${b.id}" aria-label="Marcar ${esc(b.nome)}">${estado === 'falhado' ? ICON.x : ICON.check}</button>
-    <button type="button" class="row-main" data-act="toggle" data-d="${data}" data-b="${b.id}">
-      <span class="nm">${esc(e ? e.nomeSnapshot : b.nome)}</span><span class="tm">${sub}</span></button>
+    <button type="button" class="row-main" data-act="registo" data-d="${data}" data-b="${b.id}">
+      <span class="nm">${esc(e ? e.nomeSnapshot : b.nome)}</span><span class="tm">${sub}</span>${comentario}</button>
     <span class="tag">${esc(a.nome)}</span>
     <button type="button" class="icon-btn ghost" data-act="registo" data-d="${data}" data-b="${b.id}" aria-label="Mais opções">${ICON.more}</button>
   </div>`;
@@ -417,7 +421,7 @@ function viewSemana() {
     const chips = lista.map((b) => {
       const e = reg(d, b.id);
       return `<button type="button" class="bchip ${e ? e.estado : ''}" style="--c:${area(b.area).cor}" data-act="toggle" data-d="${d}" data-b="${b.id}">` +
-        `<em>${esc(b.hora)}</em>${esc(b.nome)}</button>`;
+        `<em>${esc(b.hora)}</em>${esc(b.nome)}${e && e.nota ? '<i class="has-note" title="' + esc(e.nota) + '">' + ICON.pen + '</i>' : ''}</button>`;
     }).join('');
     return `<section class="card day ${d === h ? 'today' : ''} ${d > h ? 'fut' : ''}">
       <button type="button" class="day-head" data-act="abrir-dia" data-d="${d}">
@@ -628,17 +632,31 @@ function aviso(txt) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
 }
 
+/* Comentários anteriores do mesmo bloco (pelo nome): um toque repete-os,
+   útil quando o livro ou o projeto é o mesmo de ontem. */
+function notasAnteriores(b, data) {
+  const vistas = new Set();
+  return Object.values(S.entries)
+    .filter((e) => e.nomeSnapshot === b.nome && e.estado === 'feito' && e.nota && e.data < data)
+    .sort((x, y) => y.data.localeCompare(x.data))
+    .filter((e) => !vistas.has(e.nota) && vistas.add(e.nota))
+    .slice(0, 4);
+}
+
 function folhaRegisto(data, blockId) {
   const b = bloco(blockId), e = reg(data, blockId);
   const futuro = data > hoje();
+  const anteriores = notasAnteriores(b, data);
   abrirFolha(`<p class="sub">${esc(rotuloDia(data))} · ${esc(b.hora)}</p><h2>${esc(b.nome)}</h2>
     ${futuro ? '<p class="cap">Este dia ainda não chegou. Podes marcar na mesma, se já o fizeste antes.</p>' : ''}
-    <label class="field"><span>Minutos feitos</span>
+    <label class="field"><span>Comentário</span><textarea id="fNota" rows="3" placeholder="${esc(b.nota || 'O que fizeste, ou porque não deu')}" autofocus>${esc(e ? e.nota : '')}</textarea></label>
+    ${anteriores.length ? `<div class="prev"><span>Anteriores</span>${anteriores.map((x) =>
+      `<button type="button" class="chip small" data-act="motivo" data-v="${esc(x.nota)}">${esc(x.nota)}</button>`).join('')}</div>` : ''}
+    <label class="field"><span>Tempo (minutos)</span>
       <div class="stepper"><button type="button" data-act="step" data-n="-15">−15</button>
       <input id="fMin" type="number" inputmode="numeric" min="0" step="5" value="${e && e.estado === 'feito' ? e.minutos : b.minutos}">
       <button type="button" data-act="step" data-n="15">+15</button></div></label>
-    <label class="field"><span>Nota (opcional)</span><input id="fNota" type="text" value="${esc(e ? e.nota : '')}" placeholder="O que fizeste, ou porque não deu"></label>
-    <div class="chips-row tight">${MOTIVOS.map((m) => `<button type="button" class="chip small" data-act="motivo" data-v="${m}">${m}</button>`).join('')}</div>
+    <div class="prev"><span>Se não deu</span>${MOTIVOS.map((m) => `<button type="button" class="chip small" data-act="motivo" data-v="${m}">${m}</button>`).join('')}</div>
     <div class="sheet-acts">
       <button type="button" class="btn ok" data-act="guardar-registo" data-d="${data}" data-b="${blockId}" data-e="feito">Feito</button>
       <button type="button" class="btn warn" data-act="guardar-registo" data-d="${data}" data-b="${blockId}" data-e="falhado">Não cumprido</button>
@@ -664,7 +682,9 @@ function folhaBloco(b) {
       <label class="field"><span>Duração (min)</span><input id="bMin" type="number" inputmode="numeric" min="5" step="5" value="${b.minutos}" required></label>
     </div>
     <div class="chips-row tight">${[15, 30, 45, 60, 90, 120].map((m) => `<button type="button" class="chip small" data-act="dur" data-v="${m}">${duracao(m)}</button>`).join('')}</div>
-    <label class="field"><span>Nota (opcional)</span><input id="bNota" type="text" value="${esc(b.nota)}" placeholder="Contexto curto"></label>
+    <label class="field"><span>Nota ou pergunta (opcional)</span><input id="bNota" type="text" value="${esc(b.nota)}" placeholder="Ex.: Que livro? Quantas páginas?"></label>
+    <label class="check"><input id="bPede" type="checkbox" ${b.pedeNota ? 'checked' : ''}>
+      <span><b>Pedir comentário ao marcar</b>Ao fazer o tick abre logo o campo do comentário.</span></label>
     ${!novo && temHistorico(b.id) ? '<p class="cap">Mudar dias, hora ou duração vale a partir de hoje. As semanas passadas ficam como estavam.</p>' : ''}
     <div class="sheet-acts"><button type="submit" class="btn">Guardar</button>
     ${novo ? '<button type="button" class="btn ghost" data-act="fechar">Cancelar</button>' : `<button type="button" class="btn danger" data-act="apagar-bloco" data-b="${b.id}">Apagar</button>`}</div>
@@ -793,6 +813,7 @@ const acoes = {
     const e = reg(d, b);
     await registar(d, b, e ? '' : 'feito');
     refrescar();
+    if (!e && bloco(b).pedeNota) { folhaRegisto(d, b); return; }   // ex.: Leitura pergunta que livro
     if (!e) {
       const r = resumoDia(d);
       aviso(r.feitos === r.total ? 'Dia completo' : 'Feito');
@@ -924,7 +945,8 @@ const formularios = {
       dias,
       hora: document.getElementById('bHora').value,
       minutos: Math.max(5, Number(document.getElementById('bMin').value) || 60),
-      nota: document.getElementById('bNota').value.trim()
+      nota: document.getElementById('bNota').value.trim(),
+      pedeNota: document.getElementById('bPede').checked
     });
     await guardarBloco(b);
     fecharFolha();
